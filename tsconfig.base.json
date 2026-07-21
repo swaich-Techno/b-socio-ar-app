@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@bsocio/shared-types": ["packages/shared-types/src/index.ts"],
+      "@bsocio/validation": ["packages/validation/src/index.ts"],
+      "@bsocio/database": ["packages/database/src/index.ts"],
+      "@bsocio/storage": ["packages/storage/src/index.ts"],
+      "@bsocio/qr-engine": ["packages/qr-engine/src/index.ts"],
+      "@bsocio/constants": ["packages/constants/src/index.ts"],
+      "@bsocio/ui": ["packages/ui/src/index.tsx"]
+    }
+  }
+}

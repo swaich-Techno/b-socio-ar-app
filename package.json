@@ -1,0 +1,24 @@
+{
+  "name": "b-socio-ar-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "B Socio AR global SaaS monorepo",
+  "packageManager": "pnpm@11.9.0",
+  "engines": { "node": "24.x", "pnpm": "11.x" },
+  "scripts": {
+    "dev": "pnpm --filter @bsocio/web dev",
+    "build": "pnpm --filter @bsocio/web build",
+    "lint": "pnpm --filter @bsocio/web lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @bsocio/web test",
+    "test:coverage": "pnpm --filter @bsocio/web test:coverage",
+    "test:e2e": "pnpm --filter @bsocio/web test:e2e",
+    "db:indexes": "pnpm --filter @bsocio/web db:indexes",
+    "worker:test": "cd apps/worker && python -m pytest",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.4",
+    "typescript": "^5.8.3"
+  }
+}

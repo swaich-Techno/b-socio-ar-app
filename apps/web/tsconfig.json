@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "next" }],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@bsocio/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@bsocio/validation": ["../../packages/validation/src/index.ts"],
+      "@bsocio/database": ["../../packages/database/src/index.ts"],
+      "@bsocio/storage": ["../../packages/storage/src/index.ts"],
+      "@bsocio/qr-engine": ["../../packages/qr-engine/src/index.ts"],
+      "@bsocio/constants": ["../../packages/constants/src/index.ts"],
+      "@bsocio/ui": ["../../packages/ui/src/index.tsx"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

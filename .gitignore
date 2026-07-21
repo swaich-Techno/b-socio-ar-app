@@ -1,0 +1,41 @@
+# Dependencies and builds
+node_modules/
+.pnpm-store/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Secrets (ignore every environment file except reviewed templates)
+.env*
+!.env.example
+!apps/worker/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.mypy_cache/
+
+# Worker outputs and local customer data
+apps/worker/.cache/
+apps/worker/tmp/
+*.glb
+*.gltf
+*.usdz
+
+# Editors, operating systems, and logs
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+pnpm-debug.log*
+
+# Local deployment metadata
+.vercel/

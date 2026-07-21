@@ -1,0 +1,17 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+pydantic-settings>=2.8,<3
+pymongo>=4.11,<5
+boto3>=1.37,<2
+Pillow>=11,<13
+numpy>=2,<3
+trimesh>=4.6,<5
+torch>=2.5,<3
+torchvision>=0.20,<1
+rembg[cpu]>=2.0.65,<3
+qrcode[pil]>=8,<9
+pygltflib>=1.16,<2
+pytest>=8.3,<10
+pytest-cov>=6,<8
+mongomock>=4.3,<5
+httpx>=0.28,<1

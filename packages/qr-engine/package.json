@@ -1,0 +1,10 @@
+{
+  "name": "@bsocio/qr-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "qrcode": "^1.5.4", "qrcode-svg": "^1.1.0" },
+  "devDependencies": { "@types/qrcode": "^1.5.5" }
+}

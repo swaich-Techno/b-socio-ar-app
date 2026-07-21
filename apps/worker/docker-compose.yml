@@ -1,0 +1,13 @@
+services:
+  bsocio-3d-worker:
+    build:
+      context: .
+      args:
+        TRIPOSR_REVISION: ${TRIPOSR_REVISION:?Set TRIPOSR_REVISION to a reviewed full 40-character TripoSR commit SHA}
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - triposr-cache:/home/worker/.cache
+
+volumes:
+  triposr-cache:
