@@ -128,6 +128,7 @@ The application enforces the one-demo/five-product/five-job/five-AR/five-QR limi
 - [Administrator setup](docs/admin-setup/README.md)
 - [Deployment checklist](docs/deployment/README.md)
 - [Vercel deployment](docs/deployment/VERCEL.md)
+- [Restaurant and jewellery commerce](docs/commerce/README.md)
 - [Security model](docs/security/README.md)
 - [Troubleshooting](docs/troubleshooting/README.md)
 

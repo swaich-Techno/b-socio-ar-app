@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test"
-    ,"db:indexes": "tsx scripts/create-indexes.ts"
+    ,"db:indexes": "tsx scripts/create-indexes.ts",
+    "billing:seed": "tsx scripts/seed-billing.ts"
   },
   "dependencies": {
     "@bsocio/constants": "workspace:*",

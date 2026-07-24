@@ -27,6 +27,27 @@ async function sendLink(email: string, subject: string, heading: string, body: s
   });
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+export async function sendBillingNotificationEmail(email: string, title: string, message: string): Promise<void> {
+  const { settings, client } = transport();
+  const href = `${settings.appUrl}/dashboard/billing`;
+  await client.sendMail({
+    from: settings.from,
+    to: email,
+    subject: `${title} · Locate Now billing`,
+    text: `${title}\n\n${message}\n\nOpen billing: ${href}`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#0f172a"><p style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#64748b">Locate Now billing</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p><a href="${href}" style="display:inline-block;padding:12px 18px;background:#0f172a;color:white;text-decoration:none;border-radius:10px">Open billing</a></p></div>`,
+  });
+}
+
 export async function sendVerificationEmail(email: string, token: string): Promise<void> {
   const settings = getEmailSettings();
   const href = `${settings.appUrl}/verify-email?token=${encodeURIComponent(token)}`;

@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { Badge, Button, Card, Progress } from "@bsocio/ui";
 import { apiPost, useApi } from "@/hooks/use-api";
+import { BillingDashboard } from "@/components/billing-pages";
 
 interface DashboardData {
   productsUsed: number;
@@ -420,6 +421,11 @@ const sectionInfo: Record<
       "Submit a transaction reference and private proof for manual verification.",
     icon: CreditCard,
   },
+  billing: {
+    title: "Subscription & billing",
+    description: "Plan, usage, renewal, invoices and request add-ons.",
+    icon: CreditCard,
+  },
   analytics: {
     title: "Analytics",
     description: "QR scans and AR opens for published experiences.",
@@ -464,6 +470,7 @@ export function CustomerSection({ section }: { section: string }) {
   if (section === "business") return <BusinessSection />;
   if (section === "custom-package") return <PackagesSection />;
   if (section === "payments") return <PaymentsSection />;
+  if (section === "billing") return <BillingDashboard />;
   if (section === "notifications")
     return (
       <RecordsSection
@@ -1672,7 +1679,7 @@ function QrEditor({
         {item.active ? (
           <Link
             className="button button-primary"
-            href={`/q/${item.uniqueCode}`}
+            href={`/q/product/${item.uniqueCode}`}
           >
             Test live code
           </Link>

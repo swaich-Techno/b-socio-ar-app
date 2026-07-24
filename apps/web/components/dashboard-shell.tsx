@@ -13,11 +13,13 @@ import {
   ChartNoAxesCombined,
   ChevronRight,
   CircleHelp,
+  ClipboardList,
   CreditCard,
   Cuboid,
   FileCheck2,
   FolderKanban,
   Gauge,
+  Gem,
   HeartPulse,
   Images,
   LayoutDashboard,
@@ -28,6 +30,8 @@ import {
   ScanLine,
   Settings,
   ShoppingBag,
+  Store,
+  Utensils,
   UserRound,
   UsersRound,
   Warehouse,
@@ -48,12 +52,27 @@ const customerNav = [
   ["Approval status", "/dashboard/approval-status", FileCheck2],
   ["Custom package", "/dashboard/custom-package", PackageCheck],
   ["Payments", "/dashboard/payments", CreditCard],
+  ["Subscription & billing", "/dashboard/billing", BadgeDollarSign],
   ["Analytics", "/dashboard/analytics", ChartNoAxesCombined],
   ["Notifications", "/dashboard/notifications", Bell],
   ["Support", "/dashboard/support", CircleHelp],
   ["Profile", "/dashboard/profile", UserRound],
   ["Security", "/dashboard/security", LockKeyhole],
   ["Settings", "/dashboard/settings", Settings],
+] as const;
+
+const restaurantNav = [
+  ["Restaurant tables", "/dashboard/restaurant/tables", Utensils],
+  ["Restaurant menu", "/dashboard/restaurant/menu", ClipboardList],
+  ["Order activity", "/dashboard/restaurant/orders", ShoppingBag],
+  ["Restaurant analytics", "/dashboard/restaurant/analytics", ChartNoAxesCombined],
+  ["Restaurant settings", "/dashboard/restaurant/settings", Store],
+] as const;
+
+const jewelleryNav = [
+  ["Jewellery enquiries", "/dashboard/jewellery/enquiries", Gem],
+  ["Enquiry analytics", "/dashboard/jewellery/analytics", ChartNoAxesCombined],
+  ["Jewellery settings", "/dashboard/jewellery/settings", Store],
 ] as const;
 
 const adminNav = [
@@ -70,6 +89,7 @@ const adminNav = [
   ["Approval queue", "/admin/approval-queue", FileCheck2],
   ["Packages", "/admin/packages", PackageCheck],
   ["Payments", "/admin/payments", BadgeDollarSign],
+  ["Subscriptions", "/admin/billing", CreditCard],
   ["Team members", "/admin/team-members", UsersRound],
   ["Support", "/admin/support", CircleHelp],
   ["Analytics", "/admin/analytics", ChartNoAxesCombined],
@@ -84,7 +104,7 @@ const ADMIN_NAV_PERMISSIONS: Record<string, readonly string[]> = {
   DEMO_REVIEWER: ["/admin", "/admin/demo-projects", "/admin/products", "/admin/uploads", "/admin/approval-queue"],
   THREE_D_REVIEWER: ["/admin", "/admin/products", "/admin/uploads", "/admin/job-queue", "/admin/models", "/admin/approval-queue", "/admin/worker-health", "/admin/storage-usage"],
   AR_PUBLISHER: ["/admin", "/admin/products", "/admin/models", "/admin/ar-experiences", "/admin/qr-codes"],
-  SALES_MANAGER: ["/admin", "/admin/packages"], FINANCE_MANAGER: ["/admin", "/admin/payments"],
+  SALES_MANAGER: ["/admin", "/admin/packages"], FINANCE_MANAGER: ["/admin", "/admin/payments", "/admin/billing"],
   SUPPORT_MANAGER: ["/admin", "/admin/customers", "/admin/businesses", "/admin/demo-projects", "/admin/products", "/admin/support"],
 };
 
@@ -97,11 +117,18 @@ export function DashboardShell({
 }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState("");
+  const [businessCategory, setBusinessCategory] = useState("");
   const pathname = usePathname();
   const router = useRouter();
   const allowedAdminPaths = ADMIN_NAV_PERMISSIONS[role] ?? ["/admin"];
   const visibleAdminNav = adminNav.filter(([, href]) => allowedAdminPaths.includes("*") || allowedAdminPaths.includes(href));
-  const nav = admin ? visibleAdminNav : customerNav;
+  const category = businessCategory.toLowerCase();
+  const commerceNav = /restaurant|cafe|café|food|bakery/.test(category)
+    ? restaurantNav
+    : /jewellery|jewelry/.test(category)
+      ? jewelleryNav
+      : [];
+  const nav = admin ? visibleAdminNav : [...customerNav, ...commerceNav];
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -117,6 +144,15 @@ export function DashboardShell({
       const payload = await response.json() as { data?: { user?: { role?: string } } };
       if (!cancelled) setRole(payload.data?.user?.role ?? "");
     }).catch(() => { if (!cancelled) setRole(""); });
+    return () => { cancelled = true; };
+  }, [admin]);
+  useEffect(() => {
+    if (admin) return;
+    let cancelled = false;
+    fetch("/api/business", { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as { data?: { business?: { category?: string } } };
+      if (!cancelled) setBusinessCategory(payload.data?.business?.category ?? "");
+    }).catch(() => { if (!cancelled) setBusinessCategory(""); });
     return () => { cancelled = true; };
   }, [admin]);
   async function logout() {

@@ -4,6 +4,7 @@ import { createElement, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Box,
+  Camera,
   Contact,
   Instagram,
   LoaderCircle,
@@ -12,14 +13,19 @@ import {
   RotateCcw,
   ScanLine,
   Share2,
+  SwitchCamera,
 } from "lucide-react";
 import { Button, Card, Progress } from "@bsocio/ui";
 import { Brand } from "@/components/brand";
+import { FoodCommerceActions, JewelleryCommerceActions } from "@/components/commerce-public-actions";
 
 interface ArPayload {
-  business: { name: string; slug: string; primaryColour: string };
+  business: { name: string; slug: string; category: string; primaryColour: string; website?: string };
   product: {
+    id: string;
     name: string;
+    slug: string;
+    category: string;
     description: string;
     material: string;
     colour: string;
@@ -42,19 +48,49 @@ interface ArPayload {
     scale?: number;
     cameraOrbit?: string;
   };
+  commerce: {
+    kind: "RESTAURANT" | "JEWELLERY";
+    menuCategory?: string;
+    servingInformation?: string;
+    approximateServingSize?: string;
+    sku?: string;
+    jewelleryCategory?: string;
+    metalType?: string;
+    stoneType?: string;
+    productSize?: string;
+    variants: string[];
+    tryOnEnabled: boolean;
+  } | null;
+  diningSession: {
+    active: boolean;
+    table: { id: string; number: string; name: string } | null;
+  };
 }
 
 export function PublicArExperience({
   businessSlug,
   productSlug,
+  experienceKind = "default",
+  sessionToken = "",
+  launchAr = false,
 }: {
   businessSlug: string;
   productSlug: string;
+  experienceKind?: "default" | "restaurant" | "jewellery";
+  sessionToken?: string;
+  launchAr?: boolean;
 }) {
   const [data, setData] = useState<ArPayload | null>(null);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
+  const [cameraError, setCameraError] = useState("");
+  const [screenshotUrl, setScreenshotUrl] = useState("");
   const viewer = useRef<HTMLElement | null>(null);
+  const video = useRef<HTMLVideoElement | null>(null);
+  const stream = useRef<MediaStream | null>(null);
+  const screenshot = useRef("");
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -96,6 +132,98 @@ export function PublicArExperience({
     element.addEventListener("progress", update);
     return () => element.removeEventListener("progress", update);
   }, [data]);
+  useEffect(() => () => {
+    stream.current?.getTracks().forEach((track) => track.stop());
+    if (screenshot.current) URL.revokeObjectURL(screenshot.current);
+  }, []);
+  const effectiveKind = experienceKind === "default"
+    ? data?.commerce?.kind === "RESTAURANT"
+      ? "restaurant"
+      : data?.commerce?.kind === "JEWELLERY"
+        ? "jewellery"
+        : "default"
+    : experienceKind;
+  async function track(eventType: string) {
+    if (!data || effectiveKind === "default") return;
+    const endpoint = effectiveKind === "restaurant"
+      ? "/api/restaurant/analytics"
+      : `/api/jewellery/analytics?businessSlug=${encodeURIComponent(data.business.slug)}`;
+    await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(sessionToken ? { "x-dining-session": sessionToken } : {}),
+      },
+      body: JSON.stringify({ eventType, productId: data.product.id }),
+    }).catch(() => undefined);
+  }
+  async function startCamera(nextFacing = cameraFacing) {
+    setCameraError("");
+    try {
+      const startingTryOn = !cameraActive;
+      stream.current?.getTracks().forEach((track) => track.stop());
+      const nextStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: nextFacing }, width: { ideal: 1280 }, height: { ideal: 960 } },
+        audio: false,
+      });
+      stream.current = nextStream;
+      if (video.current) {
+        video.current.srcObject = nextStream;
+        await video.current.play();
+      }
+      setCameraFacing(nextFacing);
+      setCameraActive(true);
+      await Promise.all([
+        track(nextFacing === "user" ? "FRONT_CAMERA_TRY_ON" : "REAR_CAMERA_TRY_ON"),
+        ...(startingTryOn ? [track("TRY_ON_START")] : []),
+      ]);
+    } catch {
+      setCameraError("Camera permission is required for the live try-on preview. You can still view the 3D model.");
+    }
+  }
+  async function switchCamera() {
+    await startCamera(cameraFacing === "user" ? "environment" : "user");
+  }
+  async function capturePreview() {
+    if (!video.current || !cameraActive) throw new Error("Start the camera preview before taking a screenshot.");
+    const source = video.current;
+    const width = source.videoWidth || 720;
+    const height = source.videoHeight || 960;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Screenshot capture is not available on this device.");
+    if (cameraFacing === "user") {
+      context.save();
+      context.translate(width, 0);
+      context.scale(-1, 1);
+      context.drawImage(source, 0, 0, width, height);
+      context.restore();
+    } else {
+      context.drawImage(source, 0, 0, width, height);
+    }
+    const modelViewer = viewer.current as (HTMLElement & { toDataURL?: (type?: string) => string }) | null;
+    let modelData = "";
+    try { modelData = modelViewer?.toDataURL?.("image/png") ?? ""; } catch { modelData = ""; }
+    if (modelData) {
+      const overlay = new Image();
+      overlay.src = modelData;
+      await new Promise<void>((resolve) => { overlay.onload = () => resolve(); overlay.onerror = () => resolve(); });
+      context.drawImage(overlay, 0, 0, width, height);
+    }
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.94));
+    if (!blob) throw new Error("Screenshot capture is not available on this device.");
+    if (screenshot.current) URL.revokeObjectURL(screenshot.current);
+    screenshot.current = URL.createObjectURL(blob);
+    setScreenshotUrl(screenshot.current);
+    await track("SCREENSHOT_CAPTURE");
+  }
+  function deleteCapture() {
+    if (screenshot.current) URL.revokeObjectURL(screenshot.current);
+    screenshot.current = "";
+    setScreenshotUrl("");
+  }
   async function share() {
     if (navigator.share)
       await navigator.share({
@@ -143,13 +271,14 @@ export function PublicArExperience({
       "auto-rotate": true,
       "shadow-intensity": "1",
       "environment-image": "neutral",
+      style: effectiveKind === "jewellery" && cameraActive ? { background: "transparent" } : undefined,
       loading: "eager",
       scale: `${viewerScale} ${viewerScale} ${viewerScale}`,
       "camera-orbit": data.model.cameraOrbit || undefined,
     },
     createElement(
       "button",
-      { slot: "ar-button", className: "button button-primary ar-launch" },
+      { slot: "ar-button", className: "button button-primary ar-launch", onClick: () => void track(effectiveKind === "restaurant" ? "AR_LAUNCH" : "REAR_CAMERA_TRY_ON") },
       createElement(ScanLine, { size: 19 }),
       "View in your space",
     ),
@@ -170,9 +299,12 @@ export function PublicArExperience({
           Experience by <strong>{data.business.name}</strong>
         </span>
       </header>
-      <div className="ar-layout">
+      <div className={`ar-layout ${effectiveKind !== "default" ? "has-commerce-actions" : ""}`}>
         <section className="ar-viewer">
-          <div className="ar-stage">{viewerNode}</div>
+          <div className={`ar-stage ${effectiveKind === "jewellery" && cameraActive ? "tryon-camera-stage" : ""}`}>
+            {effectiveKind === "jewellery" ? <video ref={video} className="tryon-camera-video" style={{ transform: cameraFacing === "user" ? "scaleX(-1)" : "none" }} autoPlay muted playsInline aria-label="Live virtual try-on camera preview" /> : null}
+            {viewerNode}
+          </div>
           {progress < 100 ? (
             <div className="ar-progress">
               <Progress value={progress} label="Loading 3D model" />
@@ -190,9 +322,13 @@ export function PublicArExperience({
           >
             <RotateCcw size={17} /> Reset view
           </Button>
+          {effectiveKind === "jewellery" ? <div className="tryon-camera-controls">
+            {!cameraActive ? <Button variant="secondary" onClick={() => startCamera()}><Camera size={17} /> Start try-on camera</Button> : <Button variant="secondary" onClick={switchCamera}><SwitchCamera size={17} /> Switch camera</Button>}
+          </div> : null}
+          {cameraError ? <div className="tryon-camera-error" role="alert">{cameraError}</div> : null}
         </section>
         <section className="ar-details">
-          <span className="eyebrow">Approved product experience</span>
+          <span className="eyebrow">{effectiveKind === "restaurant" ? "Table-ready food experience" : effectiveKind === "jewellery" ? "Private virtual try-on" : "Approved product experience"}</span>
           <h1>{data.product.name}</h1>
           <p>{data.product.description}</p>
           {data.product.price !== undefined ? (
@@ -230,7 +366,7 @@ export function PublicArExperience({
             </div>
           </dl>
           <div className="ar-actions">
-            {data.ar.whatsappUrl ? (
+            {effectiveKind === "default" && data.ar.whatsappUrl ? (
               <a
                 className="button button-primary"
                 href={data.ar.whatsappUrl}
@@ -274,6 +410,9 @@ export function PublicArExperience({
             <ScanLine size={17} /> Android Scene Viewer and WebXR are used when
             available. Apple Quick Look appears when a USDZ version exists.
           </p>
+          {launchAr && effectiveKind === "restaurant" ? <p className="ar-launch-hint"><ScanLine size={17} /> Tap “View in your space” on the model to place this dish on your table.</p> : null}
+          {effectiveKind === "restaurant" ? <FoodCommerceActions businessSlug={data.business.slug} productId={data.product.id} productName={data.product.name} price={data.product.price} currency={data.product.currency} sessionToken={sessionToken} sessionActive={data.diningSession.active} tableName={data.diningSession.table?.name} /> : null}
+          {effectiveKind === "jewellery" ? <JewelleryCommerceActions businessSlug={data.business.slug} businessName={data.business.name} productSlug={data.product.slug} productName={data.product.name} variants={data.commerce?.variants ?? []} screenshotUrl={screenshotUrl} onCapture={capturePreview} onRetake={capturePreview} onDeleteCapture={deleteCapture} onStartCamera={() => startCamera()} cameraActive={cameraActive} /> : null}
         </section>
       </div>
     </main>

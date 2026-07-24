@@ -14,6 +14,7 @@
     "test:coverage": "pnpm --filter @bsocio/web test:coverage",
     "test:e2e": "pnpm --filter @bsocio/web test:e2e",
     "db:indexes": "pnpm --filter @bsocio/web db:indexes",
+    "billing:seed": "pnpm --filter @bsocio/web billing:seed",
     "worker:test": "cd apps/worker && python -m pytest",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },

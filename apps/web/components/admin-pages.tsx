@@ -21,6 +21,7 @@ import { apiPost, useApi } from "@/hooks/use-api";
 import { PageHeader } from "@/components/dashboard-pages";
 import { PackageBuilder, PaymentReview } from "@/components/admin-commercial";
 import { CustomerAccounts, TeamMembers } from "@/components/admin-access";
+import { AdminBillingDashboard } from "@/components/billing-pages";
 
 interface WorkerHealth {
   online: boolean;
@@ -252,6 +253,11 @@ const adminInfo: Record<
     description: "Manual proof review and verification decisions.",
     icon: Activity,
   },
+  billing: {
+    title: "Subscription operations",
+    description: "Plans, recurring revenue, renewals, usage and payment risk.",
+    icon: PackageCheck,
+  },
   "team-members": {
     title: "Team members",
     description: "Least-privilege administrator roles.",
@@ -294,6 +300,7 @@ export function AdminSection({ section }: { section: string }) {
   if (section === "worker-health") return <WorkerHealthPage />;
   if (section === "payments") return <PaymentReview />;
   if (section === "packages") return <PackageBuilder />;
+  if (section === "billing") return <AdminBillingDashboard />;
   if (section === "customers") return <CustomerAccounts />;
   if (section === "team-members") return <TeamMembers />;
   if (section === "support") return <AdminSupport />;

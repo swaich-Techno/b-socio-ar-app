@@ -24,11 +24,20 @@ import { getEnvironment, getR2Settings } from "@/lib/env";
 import { fail, getClientIp, HttpError, ok, pagination, readJson } from "@/lib/http";
 import { enforceDatabaseRateLimit } from "@/lib/rate-limit";
 import {
-  AnalyticsEvent, Approval, ArExperience, Asset, AuditLog, Business, CustomPackage, DemoProject, Model3D,
-  Notification, Payment, Product, QrCode, SupportTicket, ThreeDJob, User, WorkerHeartbeat,
+  AnalyticsEvent, Approval, ArExperience, Asset, AuditLog, BillingEvent, Business, CommerceProductProfile, CustomPackage, DemoProject, Model3D,
+  Notification, Payment, Product, QrCode, Subscription, SubscriptionUsage, SupportTicket, ThreeDJob, User, WorkerHeartbeat,
 } from "@/models";
 import { ensureDraftExperience, makeSlug, ownerFilter, requireOwnedBusiness, requireOwnedProduct } from "@/services/core";
 import { sendPasswordResetEmail, sendVerificationEmail } from "@/services/email";
+import { handleBillingGet, handleBillingPatch, handleBillingPost } from "@/services/billing/api";
+import { canCreateLocationRequest, consumeLocationRequest, startTrialSubscription } from "@/services/billing/service";
+import {
+  handleCommerceDelete,
+  handleCommerceGet,
+  handleCommercePatch,
+  handleCommercePost,
+} from "@/services/commerce/api";
+import { optionalDiningSession } from "@/services/commerce/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -113,11 +122,20 @@ async function register(request: NextRequest) {
     const business = await Business.create({ ownerId: user._id, name: input.businessName, slug, category: input.businessCategory, country: input.country, onboardingComplete: false });
     user.businessId = business._id;
     await user.save();
+    await startTrialSubscription(business._id.toString(), user._id.toString());
     await Notification.create({ userId: user._id, businessId: business._id, type: "VERIFY_EMAIL", title: "Verify your email", message: "Verify your email address to secure your B Socio AR account." });
     await writeAudit({ actorId: user._id.toString(), businessId: business._id.toString(), action: "CUSTOMER_REGISTERED", entityType: "User", entityId: user._id.toString(), request });
     if (env.ALLOW_DEMO_MODE !== "true") await sendVerificationEmail(user.email, verification.raw);
     return ok({ user: publicUser(user), verificationRequired: true, ...(env.ALLOW_DEMO_MODE === "true" ? { developmentVerificationToken: verification.raw } : {}) }, 201);
   } catch (error) {
+    const failedBusiness = await Business.findOne({ ownerId: user._id }).select("_id").lean();
+    if (failedBusiness && !Array.isArray(failedBusiness)) {
+      await Promise.all([
+        SubscriptionUsage.deleteMany({ businessId: failedBusiness._id }),
+        Subscription.deleteMany({ businessId: failedBusiness._id }),
+        BillingEvent.deleteMany({ businessId: failedBusiness._id }),
+      ]);
+    }
     await Promise.all([Business.deleteOne({ ownerId: user._id }), Notification.deleteMany({ userId: user._id })]);
     await User.deleteOne({ _id: user._id });
     throw error;
@@ -290,6 +308,16 @@ async function createProduct(request: NextRequest) {
   const auth = await requireAuth(request, ["CUSTOMER"]);
   const input = await readJson(request, productSchema);
   const business = await requireOwnedBusiness(auth);
+  const billing = await canCreateLocationRequest(business._id.toString());
+  if (!billing.allowed) {
+    throw new HttpError(
+      409,
+      billing.reason ?? "SUBSCRIPTION_RESTRICTED",
+      billing.reason === "REQUEST_LIMIT_REACHED"
+        ? "Monthly request limit reached. Upgrade your plan or contact support."
+        : "Your subscription does not currently allow new requests.",
+    );
+  }
   const demo = await DemoProject.findOne({ _id: input.demoProjectId, businessId: business._id, ownerId: auth.id, status: "UPLOADED" });
   if (!demo) throw new HttpError(404, "DEMO_NOT_FOUND", "Demo project not found.");
   const limits = getDemoLimits();
@@ -610,6 +638,16 @@ async function publishProduct(request: NextRequest) {
   const { productId } = await readJson(request, publishSchema);
   const product = await Product.findOne({ _id: productId, approvalStatus: { $in: ["APPROVED_DEMO", "PRODUCTION_APPROVED"] } });
   if (!product) throw new HttpError(409, "PRODUCT_NOT_APPROVED", "Approve the product before publishing.");
+  const billing = await canCreateLocationRequest(product.businessId.toString());
+  if (!billing.allowed) {
+    throw new HttpError(
+      409,
+      billing.reason ?? "SUBSCRIPTION_RESTRICTED",
+      billing.reason === "REQUEST_LIMIT_REACHED"
+        ? "Monthly request limit reached. The company must upgrade or contact support before another secure link is generated."
+        : "The company subscription does not currently allow a new secure link.",
+    );
+  }
   const paidPackage = await CustomPackage.findOne({ businessId: product.businessId, demoProjectId: product.demoProjectId, status: "ACCEPTED" });
   if (!paidPackage || !(await Payment.exists({ businessId: product.businessId, packageId: paidPackage._id, status: "VERIFIED" }))) throw new HttpError(409, "PAYMENT_NOT_VERIFIED", "Verify this demo's accepted package payment before publishing live AR.");
   const { ar, qr, model } = await ensureDraftExperience(product._id.toString());
@@ -643,8 +681,13 @@ async function publishProduct(request: NextRequest) {
   await product.save();
   model.status = "PUBLISHED";
   await model.save();
+  await consumeLocationRequest(
+    product.businessId.toString(),
+    `secure-link:${product._id.toString()}:v${model.version}`,
+    { productId: product._id.toString(), arExperienceId: ar._id.toString(), qrCodeId: qr._id.toString() },
+  );
   await writeAudit({ actorId: auth.id, businessId: product.businessId.toString(), action: "AR_PUBLISHED", entityType: "ArExperience", entityId: ar._id.toString(), request });
-  return ok({ arPath: qr.destinationPath, qrPath: `/q/${qr.uniqueCode}`, status: "PUBLISHED" });
+  return ok({ arPath: qr.destinationPath, qrPath: `/q/product/${qr.uniqueCode}`, status: "PUBLISHED" });
 }
 
 async function updateProductByAdmin(request: NextRequest) {
@@ -719,7 +762,10 @@ async function getPublicAr(businessSlug: string, productSlug: string, request: N
   if (!business) throw new HttpError(404, "AR_NOT_FOUND", "AR experience not found.");
   const product = await Product.findOne({ businessId: business._id, slug: productSlug });
   if (!product) throw new HttpError(404, "AR_NOT_FOUND", "AR experience not found.");
-  const ar = await ArExperience.findOne({ productId: product._id, status: "PUBLISHED" });
+  const [ar, commerceProfile] = await Promise.all([
+    ArExperience.findOne({ productId: product._id, status: "PUBLISHED" }),
+    CommerceProductProfile.findOne({ productId: product._id, businessId: business._id }),
+  ]);
   if (!ar) throw new HttpError(404, "AR_NOT_PUBLISHED", "This AR experience is not published.");
   const model = await Model3D.findById(ar.modelId);
   const glbAsset = model ? await Asset.findById(model.glbAssetId) : null;
@@ -734,17 +780,47 @@ async function getPublicAr(businessSlug: string, productSlug: string, request: N
     await Promise.all([
       ArExperience.updateOne({ _id: ar._id }, { $inc: { opens: 1 } }),
       AnalyticsEvent.create({ businessId: business._id, productId: product._id, arExperienceId: ar._id, eventType: "AR_OPEN", deviceType: request.headers.get("user-agent")?.slice(0, 200), referrer: request.headers.get("referer")?.slice(0, 500) }),
+      ...(commerceProfile?.kind === "RESTAURANT" ? [
+        AnalyticsEvent.create({ businessId: business._id, productId: product._id, arExperienceId: ar._id, eventType: "PRODUCT_VIEW" }),
+        AnalyticsEvent.create({ businessId: business._id, productId: product._id, arExperienceId: ar._id, eventType: "THREE_D_VIEW" }),
+      ] : commerceProfile?.kind === "JEWELLERY" ? [
+        AnalyticsEvent.create({ businessId: business._id, productId: product._id, arExperienceId: ar._id, eventType: "PRODUCT_VIEW" }),
+      ] : []),
     ]);
   } catch (error) { console.error("Published AR analytics write failed", error); }
+  const diningContext = commerceProfile?.kind === "RESTAURANT"
+    ? await optionalDiningSession(request, business._id.toString())
+    : null;
   return ok({
-    business: { name: business.name, slug: business.slug, primaryColour: business.primaryColour },
-    product: { name: product.name, slug: product.slug, description: product.description, category: product.category, dimensions: product.dimensions, material: product.material, colour: product.colour, price: product.price, currency: product.currency },
+    business: { name: business.name, slug: business.slug, category: business.category, primaryColour: business.primaryColour, website: business.website },
+    product: { id: product._id.toString(), name: product.name, slug: product.slug, description: product.description, category: product.category, dimensions: product.dimensions, material: product.material, colour: product.colour, price: product.price, currency: product.currency },
     ar: { title: ar.title, description: ar.description, price: ar.price, currency: ar.currency, whatsappUrl: ar.whatsappUrl, websiteUrl: ar.websiteUrl, instagramUrl: ar.instagramUrl, contactUrl: ar.contactUrl },
     model: { id: model._id.toString(), url: modelUrl, usdzUrl, fileSize: model.fileSize, hasUsdz: Boolean(usdzUrl), scale: ar.modelScale ?? 1, cameraOrbit: ar.cameraOrbit },
+    commerce: commerceProfile ? {
+      kind: commerceProfile.kind,
+      menuCategory: commerceProfile.menuCategory,
+      servingInformation: commerceProfile.servingInformation,
+      approximateServingSize: commerceProfile.approximateServingSize,
+      sku: commerceProfile.sku,
+      jewelleryCategory: commerceProfile.jewelleryCategory,
+      metalType: commerceProfile.metalType,
+      stoneType: commerceProfile.stoneType,
+      productSize: commerceProfile.productSize,
+      variants: commerceProfile.variants ?? [],
+      tryOnEnabled: commerceProfile.tryOnEnabled !== false,
+    } : null,
+    diningSession: diningContext ? {
+      active: true,
+      table: { id: diningContext.table._id.toString(), number: diningContext.table.tableNumber, name: diningContext.table.tableName },
+    } : { active: false, table: null },
   });
 }
 
 async function getRoute(request: NextRequest, path: string) {
+  const billingResponse = await handleBillingGet(request, path);
+  if (billingResponse) return billingResponse;
+  const commerceResponse = await handleCommerceGet(request, path);
+  if (commerceResponse) return commerceResponse;
   if (path === "auth/session") return ok({ user: await requireAuth(request) });
   if (path === "account") {
     const auth = await requireAuth(request, ["CUSTOMER"]);
@@ -961,7 +1037,7 @@ async function getRoute(request: NextRequest, path: string) {
       if (auth.isAdmin && !["SUPER_ADMIN", "ADMIN", "AR_PUBLISHER", "DEMO_REVIEWER"].includes(auth.role)) throw new HttpError(403, "FORBIDDEN", "You do not have permission to render product QR assets.");
       if (!auth.isAdmin && qr.ownerId.toString() !== auth.id) throw new HttpError(404, "QR_NOT_FOUND", "QR code not found.");
     }
-    const content = `${getEnvironment().NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/q/${qr.uniqueCode}`;
+    const content = `${getEnvironment().NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/q/product/${qr.uniqueCode}`;
     const format = path.split("/")[2];
     if (format === "svg") return new Response(createQrSvg(content, { foreground: qr.foreground, background: qr.background, size: qr.size, errorCorrectionLevel: qr.errorCorrectionLevel }), { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" } });
     const buffer = await QRCode.toBuffer(content, { type: "png", width: format === "print" ? Math.max(qr.size, 2048) : qr.size, margin: format === "print" ? 8 : 4, errorCorrectionLevel: qr.errorCorrectionLevel, color: { dark: qr.foreground, light: format === "transparent" ? "#00000000" : qr.background } });
@@ -989,6 +1065,10 @@ async function getRoute(request: NextRequest, path: string) {
 }
 
 async function postRoute(request: NextRequest, path: string) {
+  const billingResponse = await handleBillingPost(request, path);
+  if (billingResponse) return billingResponse;
+  const commerceResponse = await handleCommercePost(request, path);
+  if (commerceResponse) return commerceResponse;
   if (path === "auth/register") return register(request);
   if (path === "auth/login") return login(request, false);
   if (path === "auth/admin-login") return login(request, true);
@@ -1037,6 +1117,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const path = await routePath(context);
+    const billingResponse = await handleBillingPatch(request, path);
+    if (billingResponse) return billingResponse;
+    const commerceResponse = await handleCommercePatch(request, path);
+    if (commerceResponse) return commerceResponse;
     if (path === "business") return saveBusiness(request);
     if (path.startsWith("products/")) {
       const auth = await requireAuth(request, ["CUSTOMER"]);
@@ -1058,6 +1142,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       await current.save();
       return ok(current);
     }
+    throw new HttpError(404, "API_NOT_FOUND", "API route not found.");
+  } catch (error) { return fail(error); }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  try {
+    const path = await routePath(context);
+    const commerceResponse = await handleCommerceDelete(request, path);
+    if (commerceResponse) return commerceResponse;
     throw new HttpError(404, "API_NOT_FOUND", "API route not found.");
   } catch (error) { return fail(error); }
 }

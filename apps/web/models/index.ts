@@ -15,6 +15,7 @@ const userSchema = new Schema(
     passwordHash: { type: String, required: true, select: false },
     role: { type: String, enum: USER_ROLES, required: true, default: "CUSTOMER" },
     businessId: { type: objectId, ref: "Business", index: true },
+    companyRole: { type: String, enum: ["COMPANY_ADMIN", "DISPATCH"], default: "COMPANY_ADMIN" },
     emailVerifiedAt: Date,
     suspendedAt: Date,
     suspensionReason: String,
@@ -39,6 +40,9 @@ const businessSchema = new Schema(
     slug: { type: String, required: true, lowercase: true, trim: true },
     category: { type: String, required: true },
     country: { type: String, required: true },
+    billingRegion: { type: String, enum: ["INDIA", "UNITED_STATES", "CANADA", "UNITED_KINGDOM", "EUROPE", "MIDDLE_EAST", "OTHER"] },
+    billingAddress: String,
+    taxIdentificationNumber: String,
     website: String,
     whatsapp: String,
     instagram: String,
@@ -295,20 +299,34 @@ const paymentSchema = new Schema(
   {
     customerId: { type: objectId, ref: "User", required: true, index: true },
     businessId: { type: objectId, ref: "Business", required: true, index: true },
-    packageId: { type: objectId, ref: "CustomPackage", required: true },
-    method: { type: String, enum: ["BANK_TRANSFER", "UPI", "OFFLINE"], required: true },
+    packageId: { type: objectId, ref: "CustomPackage" },
+    subscriptionId: { type: objectId, ref: "Subscription", index: true },
+    invoiceId: { type: objectId, ref: "Invoice" },
+    method: { type: String, enum: ["BANK_TRANSFER", "UPI", "OFFLINE", "CARD", "TEST"], required: true },
+    provider: { type: String, enum: ["STRIPE", "RAZORPAY", "TEST", "OFFLINE"], default: "OFFLINE" },
+    providerPaymentId: String,
+    providerCheckoutId: String,
+    purpose: { type: String, enum: ["SUBSCRIPTION", "UPGRADE", "ADD_ON", "OFFLINE_PACKAGE"], default: "OFFLINE_PACKAGE" },
+    targetPlanId: { type: objectId, ref: "Plan" },
+    targetAddOnPackId: { type: objectId, ref: "AddOnPack" },
+    targetBillingPeriod: { type: String, enum: ["MONTHLY", "ANNUAL"] },
+    couponId: { type: objectId, ref: "Coupon" },
     transactionReference: { type: String, required: true, index: true },
-    proofAssetId: { type: objectId, ref: "Asset", required: true },
+    proofAssetId: { type: objectId, ref: "Asset" },
+    amount: { type: Number, min: 0 },
+    currency: String,
+    isTest: { type: Boolean, default: false },
+    metadata: { type: Schema.Types.Mixed, default: {} },
     customerNotes: String,
     adminNotes: String,
-    status: { type: String, enum: ["SUBMITTED", "VERIFIED", "REJECTED", "CLARIFICATION_REQUESTED"], default: "SUBMITTED", index: true },
+    status: { type: String, enum: ["PENDING", "TEST_PENDING", "SUBMITTED", "VERIFIED", "COMPLETED", "FAILED", "REJECTED", "CLARIFICATION_REQUESTED", "REFUNDED"], default: "SUBMITTED", index: true },
     reviewedBy: { type: objectId, ref: "User" },
     reviewedAt: Date,
   },
   timestamps,
 );
 paymentSchema.index({ businessId: 1, transactionReference: 1 }, { unique: true });
-paymentSchema.index({ packageId: 1 }, { unique: true });
+paymentSchema.index({ packageId: 1 }, { unique: true, sparse: true });
 paymentSchema.index({ createdAt: -1 });
 
 const rateLimitBucketSchema = new Schema(
@@ -425,3 +443,6 @@ export const AuditLog = registered("AuditLog", auditLogSchema, "auditLogs");
 export const WorkerHeartbeat = registered("WorkerHeartbeat", workerHeartbeatSchema, "workerHeartbeats");
 export const RateLimitBucket = registered("RateLimitBucket", rateLimitBucketSchema, "rateLimitBuckets");
 export const SupportTicket = registered("SupportTicket", supportTicketSchema, "supportTickets");
+
+export * from "./billing";
+export * from "./commerce";
