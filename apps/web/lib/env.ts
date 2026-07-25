@@ -5,7 +5,10 @@ const optionalString = z.preprocess((value) => (value === "" ? undefined : value
 const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), z.string().url().optional());
 
 const serverEnvironmentSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.enum(["development", "test", "production"]).default("development"),
+  ),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   MONGODB_URI: optionalString,
   MONGODB_DB_NAME: z.string().default("bsocio_ar"),

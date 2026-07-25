@@ -5,14 +5,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "tsx scripts/create-indexes-on-production-build.ts",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
-    ,"db:indexes": "tsx scripts/create-indexes.ts",
+    "test:e2e": "playwright test",
+    "db:indexes": "tsx scripts/create-indexes.ts",
     "billing:seed": "tsx scripts/seed-billing.ts"
   },
   "dependencies": {
