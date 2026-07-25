@@ -9,8 +9,10 @@ import {
   Copy,
   Download,
   Gem,
+  Heart,
   LoaderCircle,
   MessageCircle,
+  PackageCheck,
   Phone,
   RefreshCcw,
   Ruler,
@@ -18,6 +20,7 @@ import {
   ShoppingBag,
   Store,
   Trash2,
+  Truck,
   Video,
   X,
 } from "lucide-react";
@@ -110,9 +113,11 @@ type EnquiryType = "PRICE_ENQUIRY" | "AVAILABILITY_ENQUIRY" | "CUSTOM_SIZE_REQUE
 interface JewelleryActionsProps {
   businessSlug: string;
   businessName: string;
+  productId: string;
   productSlug: string;
   productName: string;
   variants: string[];
+  branches: Array<{ branchId: string; branchName: string }>;
   screenshotUrl: string;
   onCapture(): Promise<void>;
   onRetake(): Promise<void>;
@@ -139,6 +144,8 @@ const actionLabels: Array<[EnquiryType, string, typeof Gem]> = [
   ["STORE_VISIT", "Book store visit", Store],
   ["VIDEO_CALL", "Request video call", Video],
   ["CUSTOM_SIZE_REQUEST", "Custom size request", Ruler],
+  ["DELIVERY_ENQUIRY", "Ask about delivery", Truck],
+  ["PRODUCT_RESERVATION", "Reserve this product", PackageCheck],
 ];
 
 export function JewelleryCommerceActions(props: JewelleryActionsProps) {
@@ -149,13 +156,29 @@ export function JewelleryCommerceActions(props: JewelleryActionsProps) {
   const [result, setResult] = useState<JewelleryResponse | null>(null);
   const [captureNotice, setCaptureNotice] = useState(false);
   const [attachReference, setAttachReference] = useState(false);
+  const [favourite, setFavourite] = useState(false);
   const [form, setForm] = useState({
     branchId: "main", branchName: "", tryOnProfileId: "", customerName: "", customerMobile: "",
     customerCountryCode: "", customerCountry: "", customerTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     selectedHand: "" as "" | "LEFT" | "RIGHT", selectedFinger: "", selectedVariant: "", requestedSize: "",
     preferredDate: "", preferredTime: "", customerNote: "",
   });
+  useEffect(() => {
+    setFavourite(localStorage.getItem(`bsocio:favourite:${props.businessSlug}:${props.productSlug}`) === "true");
+  }, [props.businessSlug, props.productSlug]);
   function begin(nextType: EnquiryType) { setType(nextType); setOpen(true); setError(""); setResult(null); }
+  async function toggleFavourite() {
+    const next = !favourite;
+    setFavourite(next);
+    localStorage.setItem(`bsocio:favourite:${props.businessSlug}:${props.productSlug}`, String(next));
+    if (next) {
+      await fetch(`/api/jewellery/analytics?businessSlug=${encodeURIComponent(props.businessSlug)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventType: "PRODUCT_FAVOURITE", productId: props.productId }),
+      }).catch(() => undefined);
+    }
+  }
   async function submit() {
     setBusy(true); setError("");
     const popup = window.open("", "_blank");
@@ -202,7 +225,7 @@ export function JewelleryCommerceActions(props: JewelleryActionsProps) {
     <>
       <section className="jewellery-commerce">
         <div className="content-card-head"><div><span className="eyebrow">Private, business-direct enquiry</span><h2>Interested in this piece?</h2><p className="muted">Your message goes to {props.businessName}’s configured sales number.</p></div><Gem size={26} /></div>
-        <div className="jewellery-action-grid">{actionLabels.map(([value, label, Icon]) => <Button key={value} variant={value === "GENERAL_ENQUIRY" ? "primary" : "secondary"} onClick={() => begin(value)}><Icon size={18} /> {label}</Button>)}</div>
+        <div className="jewellery-action-grid">{actionLabels.map(([value, label, Icon]) => <Button key={value} variant={value === "GENERAL_ENQUIRY" ? "primary" : "secondary"} onClick={() => begin(value)}><Icon size={18} /> {label}</Button>)}<Button variant="secondary" onClick={toggleFavourite} aria-pressed={favourite}><Heart size={18} fill={favourite ? "currentColor" : "none"} /> {favourite ? "Saved to favourites" : "Save favourite"}</Button></div>
         <Card className="tryon-capture-card">
           <div><Camera size={23} /><span><strong>Try-on screenshot</strong><small>Saved locally unless you choose to share it.</small></span></div>
           {!props.cameraActive ? <Button variant="secondary" onClick={props.onStartCamera}><Camera size={18} /> Start camera preview</Button> : !props.screenshotUrl ? <Button variant="secondary" onClick={() => setCaptureNotice(true)}><Camera size={18} /> Capture preview</Button> : null}
@@ -213,10 +236,13 @@ export function JewelleryCommerceActions(props: JewelleryActionsProps) {
       {open ? <div className="commerce-modal enquiry-modal" role="dialog" aria-modal="true" aria-labelledby="enquiry-title"><Card><button className="modal-close" type="button" aria-label="Close" onClick={() => setOpen(false)}><X size={20} /></button><span className="eyebrow">Enquiry initiated—not a sale</span><h2 id="enquiry-title">{actionLabels.find(([value]) => value === type)?.[1]}</h2><div className="form-grid compact-grid">
         <label className="field"><span className="field-label">Your name</span><input className="input" value={form.customerName} onChange={(event) => setForm((value) => ({ ...value, customerName: event.target.value }))} /></label>
         <label className="field"><span className="field-label">Mobile number</span><input className="input" type="tel" value={form.customerMobile} onChange={(event) => setForm((value) => ({ ...value, customerMobile: event.target.value }))} /></label>
+        <label className="field"><span className="field-label">Mobile country code</span><input className="input" inputMode="tel" value={form.customerCountryCode} onChange={(event) => setForm((value) => ({ ...value, customerCountryCode: event.target.value }))} placeholder="+91" /></label>
         <label className="field"><span className="field-label">Selected hand</span><select className="input" value={form.selectedHand} onChange={(event) => setForm((value) => ({ ...value, selectedHand: event.target.value as typeof form.selectedHand }))}><option value="">Not selected</option><option value="LEFT">Left hand</option><option value="RIGHT">Right hand</option></select></label>
         <label className="field"><span className="field-label">Selected finger</span><input className="input" value={form.selectedFinger} onChange={(event) => setForm((value) => ({ ...value, selectedFinger: event.target.value }))} placeholder="Ring finger" /></label>
         <label className="field"><span className="field-label">Variant or colour</span><input className="input" list="jewellery-variants" value={form.selectedVariant} onChange={(event) => setForm((value) => ({ ...value, selectedVariant: event.target.value }))} /><datalist id="jewellery-variants">{props.variants.map((variant) => <option value={variant} key={variant} />)}</datalist></label>
         {type === "CUSTOM_SIZE_REQUEST" ? <label className="field"><span className="field-label">Required size</span><input className="input" value={form.requestedSize} onChange={(event) => setForm((value) => ({ ...value, requestedSize: event.target.value }))} /></label> : null}
+        {type === "STORE_VISIT" && props.branches.length ? <label className="field"><span className="field-label">Store branch</span><select className="input" value={form.branchId} onChange={(event) => { const branch = props.branches.find((item) => item.branchId === event.target.value); setForm((value) => ({ ...value, branchId: event.target.value, branchName: branch?.branchName || event.target.value })); }}><option value="main">Main store</option>{props.branches.map((branch) => <option value={branch.branchId} key={branch.branchId}>{branch.branchName || branch.branchId}</option>)}</select></label> : null}
+        {type === "VIDEO_CALL" ? <label className="field"><span className="field-label">Your country</span><input className="input" value={form.customerCountry} onChange={(event) => setForm((value) => ({ ...value, customerCountry: event.target.value }))} /></label> : null}
         {type === "STORE_VISIT" || type === "VIDEO_CALL" ? <><label className="field"><span className="field-label">Preferred date</span><input className="input" type="date" value={form.preferredDate} onChange={(event) => setForm((value) => ({ ...value, preferredDate: event.target.value }))} /></label><label className="field"><span className="field-label">Preferred time</span><input className="input" type="time" value={form.preferredTime} onChange={(event) => setForm((value) => ({ ...value, preferredTime: event.target.value }))} /></label></> : null}
         <label className="field form-span"><span className="field-label">Your note</span><textarea className="input" value={form.customerNote} onChange={(event) => setForm((value) => ({ ...value, customerNote: event.target.value }))} /></label>
       </div>{props.screenshotUrl ? <label className="check-row"><input type="checkbox" checked={attachReference} onChange={(event) => setAttachReference(event.target.checked)} /> Add a note that I have a saved try-on image</label> : null}<p className="screenshot-instruction">A standard WhatsApp link cannot attach the image automatically. You may attach your saved try-on image in WhatsApp.</p>{error ? <div className="menu-error" role="alert">{error}</div> : null}{result ? <div className="enquiry-result"><Badge tone="info">{result.statusLabel}</Badge><p>{result.instruction}</p><div className="commerce-form-actions">{result.whatsappUrl ? <a className="button button-primary" href={result.whatsappUrl}><MessageCircle size={18} /> Open WhatsApp</a> : null}<Button variant="secondary" onClick={() => navigator.clipboard.writeText(result.message)}><Copy size={18} /> Copy enquiry</Button>{result.callUrl ? <a className="button button-secondary" href={result.callUrl}><Phone size={18} /> Call store</a> : null}{result.websiteUrl ? <a className="button button-secondary" href={result.websiteUrl}>Website enquiry</a> : null}</div></div> : <div className="commerce-form-actions"><Button onClick={submit} disabled={busy}>{busy ? <LoaderCircle className="spin" size={18} /> : <MessageCircle size={18} />} Prepare WhatsApp enquiry</Button><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button></div>}</Card></div> : null}

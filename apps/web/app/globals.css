@@ -397,6 +397,8 @@ textarea.input { min-height: 118px; resize: vertical; }
 .commerce-mini-details dd { margin: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; text-align: right; }
 .commerce-card-actions .button-danger { width: 46px; padding-inline: 0; }
 .compact-grid { gap: 12px; margin-top: 16px; }
+.branch-contact-row { display: grid; gap: 12px; margin-top: 12px; padding: 14px; }
+.branch-contact-row .button-danger { align-self: end; min-height: 46px; }
 .commerce-checks { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
 .commerce-total-row { display: flex; justify-content: space-between; gap: 16px; margin: 18px 0; padding-top: 14px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
 .commerce-disclaimer { display: flex; align-items: flex-start; gap: 10px; margin-top: 18px; padding: 14px; color: #6b4b0f; border: 1px solid #e8d39f; border-radius: 12px; background: #fff9e8; }
@@ -404,7 +406,11 @@ textarea.input { min-height: 118px; resize: vertical; }
 .commerce-status-card { width: min(100%, 520px); display: grid; place-items: center; gap: 14px; padding: 34px; text-align: center; }
 .commerce-status-card h1, .commerce-status-card p { margin: 0; }
 .commerce-status-card p { color: var(--muted-foreground); }
-@media (min-width: 720px) { .commerce-table-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 720px) {
+  .commerce-table-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .branch-contact-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .branch-contact-row .button-danger { justify-self: start; }
+}
 
 /* Restaurant mobile menu */
 .menu-loading { min-height: 100dvh; display: grid; place-items: center; align-content: center; gap: 10px; background: #f6f4ee; }

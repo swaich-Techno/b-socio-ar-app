@@ -132,6 +132,7 @@ export interface JewelleryEnquiryMessageInput {
   preferredTime?: string;
   customerName?: string;
   customerMobile?: string;
+  customerCountryCode?: string;
   customerCountry?: string;
   customerTimezone?: string;
   branchName?: string;
@@ -174,7 +175,10 @@ export function buildJewelleryEnquiryMessage(input: JewelleryEnquiryMessageInput
   if (input.preferredDate) lines.push(`Preferred Date: ${cleanMessageText(input.preferredDate, 20)}`);
   if (input.preferredTime) lines.push(`Preferred Time: ${cleanMessageText(input.preferredTime, 20)}`);
   if (input.customerName) lines.push(`Customer Name: ${cleanMessageText(input.customerName, 120)}`);
-  if (input.customerMobile) lines.push(`Customer Mobile: ${cleanMessageText(input.customerMobile, 30)}`);
+  if (input.customerMobile) {
+    const customerNumber = [input.customerCountryCode, input.customerMobile].filter(Boolean).map((value) => cleanMessageText(value, 30)).join(" ");
+    lines.push(`Customer Mobile: ${customerNumber}`);
+  }
   if (input.customerCountry) lines.push(`Customer Country: ${cleanMessageText(input.customerCountry, 100)}`);
   if (input.customerTimezone) lines.push(`Customer Timezone: ${cleanMessageText(input.customerTimezone, 100)}`);
   if (input.branchName) lines.push(`Store Branch: ${cleanMessageText(input.branchName, 120)}`);

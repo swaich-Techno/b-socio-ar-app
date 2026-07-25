@@ -61,6 +61,27 @@ describe("commerce WhatsApp security and messages", () => {
     expect(message).toContain("https://example.com/try-on/royal/halo-ring");
   });
 
+  it("includes appointment contact, branch and timing in a store-visit enquiry", () => {
+    const message = buildJewelleryEnquiryMessage({
+      businessName: "Royal Jewellery",
+      productName: "Diamond Halo Ring",
+      sku: "RH-2041",
+      productUrl: "https://example.com/ar/royal/halo-ring",
+      tryOnUrl: "https://example.com/try-on/royal/halo-ring",
+      enquiryType: "STORE_VISIT",
+      customerName: "Rahul",
+      customerCountryCode: "+91",
+      customerMobile: "9876543210",
+      branchName: "Downtown store",
+      preferredDate: "2026-08-10",
+      preferredTime: "14:30",
+    });
+    expect(message).toContain("Customer Mobile: +91 9876543210");
+    expect(message).toContain("Store Branch: Downtown store");
+    expect(message).toContain("Preferred Date: 2026-08-10");
+    expect(message).toContain("Preferred Time: 14:30");
+  });
+
   it("encodes message text and never permits a customer-selected phone path", () => {
     const url = buildWhatsAppUrl("919876543210", "Hello & <script>alert(1)</script>");
     expect(url).toMatch(/^https:\/\/wa\.me\/919876543210\?text=/);

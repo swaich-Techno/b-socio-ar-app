@@ -59,6 +59,7 @@ interface ArPayload {
     stoneType?: string;
     productSize?: string;
     variants: string[];
+    branches: Array<{ branchId: string; branchName: string }>;
     tryOnEnabled: boolean;
   } | null;
   diningSession: {
@@ -91,6 +92,8 @@ export function PublicArExperience({
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const screenshot = useRef("");
+  const tryOnStartedAt = useRef<number | null>(null);
+  const durationReported = useRef(false);
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -143,7 +146,7 @@ export function PublicArExperience({
         ? "jewellery"
         : "default"
     : experienceKind;
-  async function track(eventType: string) {
+  async function track(eventType: string, durationSeconds?: number) {
     if (!data || effectiveKind === "default") return;
     const endpoint = effectiveKind === "restaurant"
       ? "/api/restaurant/analytics"
@@ -154,9 +157,29 @@ export function PublicArExperience({
         "Content-Type": "application/json",
         ...(sessionToken ? { "x-dining-session": sessionToken } : {}),
       },
-      body: JSON.stringify({ eventType, productId: data.product.id }),
+      body: JSON.stringify({ eventType, productId: data.product.id, durationSeconds }),
     }).catch(() => undefined);
   }
+  useEffect(() => {
+    if (!data || effectiveKind !== "jewellery") return;
+    const recordDuration = () => {
+      if (!tryOnStartedAt.current || durationReported.current) return;
+      durationReported.current = true;
+      const durationSeconds = Math.max(1, Math.round((Date.now() - tryOnStartedAt.current) / 1000));
+      const endpoint = `/api/jewellery/analytics?businessSlug=${encodeURIComponent(data.business.slug)}`;
+      const body = JSON.stringify({ eventType: "TRY_ON_DURATION", productId: data.product.id, durationSeconds });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(endpoint, new Blob([body], { type: "application/json" }));
+      } else {
+        void fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+      }
+    };
+    window.addEventListener("pagehide", recordDuration);
+    return () => {
+      window.removeEventListener("pagehide", recordDuration);
+      recordDuration();
+    };
+  }, [data, effectiveKind]);
   async function startCamera(nextFacing = cameraFacing) {
     setCameraError("");
     try {
@@ -173,6 +196,10 @@ export function PublicArExperience({
       }
       setCameraFacing(nextFacing);
       setCameraActive(true);
+      if (startingTryOn) {
+        tryOnStartedAt.current = Date.now();
+        durationReported.current = false;
+      }
       await Promise.all([
         track(nextFacing === "user" ? "FRONT_CAMERA_TRY_ON" : "REAR_CAMERA_TRY_ON"),
         ...(startingTryOn ? [track("TRY_ON_START")] : []),
@@ -412,7 +439,7 @@ export function PublicArExperience({
           </p>
           {launchAr && effectiveKind === "restaurant" ? <p className="ar-launch-hint"><ScanLine size={17} /> Tap “View in your space” on the model to place this dish on your table.</p> : null}
           {effectiveKind === "restaurant" ? <FoodCommerceActions businessSlug={data.business.slug} productId={data.product.id} productName={data.product.name} price={data.product.price} currency={data.product.currency} sessionToken={sessionToken} sessionActive={data.diningSession.active} tableName={data.diningSession.table?.name} /> : null}
-          {effectiveKind === "jewellery" ? <JewelleryCommerceActions businessSlug={data.business.slug} businessName={data.business.name} productSlug={data.product.slug} productName={data.product.name} variants={data.commerce?.variants ?? []} screenshotUrl={screenshotUrl} onCapture={capturePreview} onRetake={capturePreview} onDeleteCapture={deleteCapture} onStartCamera={() => startCamera()} cameraActive={cameraActive} /> : null}
+          {effectiveKind === "jewellery" ? <JewelleryCommerceActions businessSlug={data.business.slug} businessName={data.business.name} productId={data.product.id} productSlug={data.product.slug} productName={data.product.name} variants={data.commerce?.variants ?? []} branches={data.commerce?.branches ?? []} screenshotUrl={screenshotUrl} onCapture={capturePreview} onRetake={capturePreview} onDeleteCapture={deleteCapture} onStartCamera={() => startCamera()} cameraActive={cameraActive} /> : null}
         </section>
       </div>
     </main>

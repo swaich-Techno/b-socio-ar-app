@@ -24,7 +24,7 @@ import { getEnvironment, getR2Settings } from "@/lib/env";
 import { fail, getClientIp, HttpError, ok, pagination, readJson } from "@/lib/http";
 import { enforceDatabaseRateLimit } from "@/lib/rate-limit";
 import {
-  AnalyticsEvent, Approval, ArExperience, Asset, AuditLog, BillingEvent, Business, CommerceProductProfile, CustomPackage, DemoProject, Model3D,
+  AnalyticsEvent, Approval, ArExperience, Asset, AuditLog, BillingEvent, Business, CommerceProductProfile, CustomPackage, DemoProject, JewellerySettings, Model3D,
   Notification, Payment, Product, QrCode, Subscription, SubscriptionUsage, SupportTicket, ThreeDJob, User, WorkerHeartbeat,
 } from "@/models";
 import { ensureDraftExperience, makeSlug, ownerFilter, requireOwnedBusiness, requireOwnedProduct } from "@/services/core";
@@ -791,6 +791,9 @@ async function getPublicAr(businessSlug: string, productSlug: string, request: N
   const diningContext = commerceProfile?.kind === "RESTAURANT"
     ? await optionalDiningSession(request, business._id.toString())
     : null;
+  const jewellerySettings = (commerceProfile?.kind === "JEWELLERY"
+    ? await JewellerySettings.findOne({ businessId: business._id }).select("branchNumbers").lean()
+    : null) as { branchNumbers?: Array<{ branchId?: string; branchName?: string }> } | null;
   return ok({
     business: { name: business.name, slug: business.slug, category: business.category, primaryColour: business.primaryColour, website: business.website },
     product: { id: product._id.toString(), name: product.name, slug: product.slug, description: product.description, category: product.category, dimensions: product.dimensions, material: product.material, colour: product.colour, price: product.price, currency: product.currency },
@@ -807,6 +810,10 @@ async function getPublicAr(businessSlug: string, productSlug: string, request: N
       stoneType: commerceProfile.stoneType,
       productSize: commerceProfile.productSize,
       variants: commerceProfile.variants ?? [],
+      branches: jewellerySettings?.branchNumbers?.flatMap((branch) => branch.branchId ? [{
+        branchId: branch.branchId,
+        branchName: branch.branchName || branch.branchId,
+      }] : []) ?? [],
       tryOnEnabled: commerceProfile.tryOnEnabled !== false,
     } : null,
     diningSession: diningContext ? {

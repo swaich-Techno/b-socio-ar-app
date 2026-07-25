@@ -57,6 +57,64 @@ function LoadingPanel() {
   return <Card className="empty-state compact"><LoaderCircle className="spin" size={30} /><strong>Loading commerce workspace…</strong></Card>;
 }
 
+interface BranchContact {
+  branchId: string;
+  branchName: string;
+  countryCallingCode: string;
+  whatsappNumber: string;
+}
+
+function branchContacts(value: unknown): BranchContact[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const branch = item as Partial<BranchContact>;
+    return {
+      branchId: branch.branchId ?? "",
+      branchName: branch.branchName ?? "",
+      countryCallingCode: branch.countryCallingCode ?? "",
+      whatsappNumber: branch.whatsappNumber ?? "",
+    };
+  });
+}
+
+function BranchContactEditor({
+  value,
+  onChange,
+}: {
+  value: BranchContact[];
+  onChange(value: BranchContact[]): void;
+}) {
+  function update(index: number, key: keyof BranchContact, nextValue: string) {
+    onChange(value.map((branch, itemIndex) => itemIndex === index ? { ...branch, [key]: nextValue } : branch));
+  }
+  return (
+    <div className="field form-span">
+      <div className="content-card-head">
+        <div>
+          <span className="field-label">Branch-specific WhatsApp destinations</span>
+          <span className="field-hint">Optional. A matching branch uses its own server-controlled number.</span>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => onChange([...value, { branchId: "", branchName: "", countryCallingCode: "", whatsappNumber: "" }])}
+        >
+          <Plus size={17} /> Add branch
+        </Button>
+      </div>
+      {value.map((branch, index) => (
+        <Card className="branch-contact-row" key={`${branch.branchId}:${index}`}>
+          <label className="field"><span className="field-label">Branch ID *</span><input className="input" value={branch.branchId} onChange={(event) => update(index, "branchId", event.target.value)} placeholder="downtown" /></label>
+          <label className="field"><span className="field-label">Visible branch name</span><input className="input" value={branch.branchName} onChange={(event) => update(index, "branchName", event.target.value)} placeholder="Downtown store" /></label>
+          <label className="field"><span className="field-label">Country code</span><input className="input" value={branch.countryCallingCode} onChange={(event) => update(index, "countryCallingCode", event.target.value)} placeholder="+91" /></label>
+          <label className="field"><span className="field-label">WhatsApp number *</span><input className="input" type="tel" value={branch.whatsappNumber} onChange={(event) => update(index, "whatsappNumber", event.target.value)} placeholder="9876543210" /></label>
+          <Button type="button" variant="danger" aria-label={`Remove ${branch.branchName || branch.branchId || "branch"}`} onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={17} /> Remove</Button>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export function RestaurantTablesAdmin({
   mode = "list",
   tableId,
@@ -196,7 +254,7 @@ interface RestaurantSettingsForm {
   menuLanguages: string[];
   orderInstructions: string;
   openingHours: string;
-  branchNumbers: [];
+  branchNumbers: BranchContact[];
 }
 const defaultRestaurantSettings: RestaurantSettingsForm = {
   whatsappCountryCode: "+91", whatsappNumber: "", defaultOrderLanguage: "en", currency: "INR",
@@ -215,7 +273,7 @@ export function RestaurantSettingsAdmin() {
   const [error, setError] = useState("");
   useEffect(() => {
     if (state.data?.settings) {
-      setForm((current) => ({ ...current, ...state.data?.settings, branchNumbers: [] }));
+      setForm((current) => ({ ...current, ...state.data?.settings, branchNumbers: branchContacts(state.data?.settings?.branchNumbers) }));
       setLanguages(state.data.settings.menuLanguages?.join(", ") || "en");
     }
   }, [state.data]);
@@ -225,7 +283,7 @@ export function RestaurantSettingsAdmin() {
   async function save() {
     setBusy(true); setMessage(""); setError("");
     try {
-      await apiPatch("/api/restaurant/settings", { ...form, menuLanguages: languages.split(",").map((value) => value.trim()).filter(Boolean), branchNumbers: [] });
+      await apiPatch("/api/restaurant/settings", { ...form, menuLanguages: languages.split(",").map((value) => value.trim()).filter(Boolean) });
       setMessage("Restaurant ordering settings saved.");
       await state.reload();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save settings."); }
@@ -251,6 +309,7 @@ export function RestaurantSettingsAdmin() {
           <label className="field form-span"><span className="field-label">Opening hours</span><textarea className="input" value={form.openingHours} onChange={(event) => update("openingHours", event.target.value)} placeholder="Monday–Sunday, 10:00–23:00" /></label>
           <label className="field form-span"><span className="field-label">Order instructions</span><textarea className="input" value={form.orderInstructions} onChange={(event) => update("orderInstructions", event.target.value)} placeholder="Kitchen and customer guidance shown on the menu" /></label>
           <label className="field form-span"><span className="field-label">Default WhatsApp greeting</span><textarea className="input" value={form.defaultWhatsappMessage} onChange={(event) => update("defaultWhatsappMessage", event.target.value)} placeholder="Leave blank to use “Hello Restaurant Name”" /></label>
+          <BranchContactEditor value={form.branchNumbers} onChange={(value) => update("branchNumbers", value)} />
         </div>
         <Button onClick={save} disabled={busy || !form.whatsappNumber}>{busy ? <LoaderCircle className="spin" size={18} /> : <Save size={18} />} Save ordering settings</Button>
       </Card>}
@@ -345,7 +404,7 @@ interface JewellerySettingsForm {
   productWebsite: string;
   storeAddress: string;
   businessHours: string;
-  branchNumbers: [];
+  branchNumbers: BranchContact[];
 }
 const defaultJewellerySettings: JewellerySettingsForm = { whatsappCountryCode: "+91", whatsappNumber: "", defaultEnquiryMessage: "", appointmentContact: "", productWebsite: "", storeAddress: "", businessHours: "", branchNumbers: [] };
 
@@ -355,10 +414,10 @@ export function JewellerySettingsAdmin() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => { if (state.data?.settings) setForm((current) => ({ ...current, ...state.data?.settings, branchNumbers: [] })); }, [state.data]);
+  useEffect(() => { if (state.data?.settings) setForm((current) => ({ ...current, ...state.data?.settings, branchNumbers: branchContacts(state.data?.settings?.branchNumbers) })); }, [state.data]);
   function update<K extends keyof JewellerySettingsForm>(key: K, value: JewellerySettingsForm[K]) { setForm((current) => ({ ...current, [key]: value })); }
   async function save() { setBusy(true); setMessage(""); setError(""); try { await apiPatch("/api/jewellery/settings", form); setMessage("Jewellery enquiry settings saved."); await state.reload(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save settings."); } finally { setBusy(false); } }
-  return <div className="dashboard-page"><PageHeader title="Jewellery enquiry settings" description="Use this business’s own WhatsApp sales number for product enquiries and appointments." /><Message value={message} /><Message value={error || state.error} error />{state.loading ? <LoadingPanel /> : <Card className="content-card"><div className="content-card-head"><div><h2>Sales contact</h2><p className="muted">The server owns this number; customer input can never replace it.</p></div><Store size={24} /></div><div className="form-grid"><label className="field"><span className="field-label">Country calling code *</span><input className="input" value={form.whatsappCountryCode} onChange={(event) => update("whatsappCountryCode", event.target.value)} /></label><label className="field"><span className="field-label">WhatsApp sales number *</span><input className="input" type="tel" value={form.whatsappNumber} onChange={(event) => update("whatsappNumber", event.target.value)} /></label><label className="field"><span className="field-label">Appointment contact</span><input className="input" value={form.appointmentContact} onChange={(event) => update("appointmentContact", event.target.value)} /></label><label className="field"><span className="field-label">Product website</span><input className="input" type="url" value={form.productWebsite} onChange={(event) => update("productWebsite", event.target.value)} /></label><label className="field form-span"><span className="field-label">Store address</span><textarea className="input" value={form.storeAddress} onChange={(event) => update("storeAddress", event.target.value)} /></label><label className="field form-span"><span className="field-label">Business hours</span><textarea className="input" value={form.businessHours} onChange={(event) => update("businessHours", event.target.value)} /></label><label className="field form-span"><span className="field-label">Default enquiry greeting</span><textarea className="input" value={form.defaultEnquiryMessage} onChange={(event) => update("defaultEnquiryMessage", event.target.value)} /></label></div><Button onClick={save} disabled={busy || !form.whatsappNumber}>{busy ? <LoaderCircle className="spin" size={18} /> : <Save size={18} />} Save enquiry settings</Button></Card>}</div>;
+  return <div className="dashboard-page"><PageHeader title="Jewellery enquiry settings" description="Use this business’s own WhatsApp sales number for product enquiries and appointments." /><Message value={message} /><Message value={error || state.error} error />{state.loading ? <LoadingPanel /> : <Card className="content-card"><div className="content-card-head"><div><h2>Sales contact</h2><p className="muted">The server owns this number; customer input can never replace it.</p></div><Store size={24} /></div><div className="form-grid"><label className="field"><span className="field-label">Country calling code *</span><input className="input" value={form.whatsappCountryCode} onChange={(event) => update("whatsappCountryCode", event.target.value)} /></label><label className="field"><span className="field-label">WhatsApp sales number *</span><input className="input" type="tel" value={form.whatsappNumber} onChange={(event) => update("whatsappNumber", event.target.value)} /></label><label className="field"><span className="field-label">Appointment contact</span><input className="input" value={form.appointmentContact} onChange={(event) => update("appointmentContact", event.target.value)} /></label><label className="field"><span className="field-label">Product website</span><input className="input" type="url" value={form.productWebsite} onChange={(event) => update("productWebsite", event.target.value)} /></label><label className="field form-span"><span className="field-label">Store address</span><textarea className="input" value={form.storeAddress} onChange={(event) => update("storeAddress", event.target.value)} /></label><label className="field form-span"><span className="field-label">Business hours</span><textarea className="input" value={form.businessHours} onChange={(event) => update("businessHours", event.target.value)} /></label><label className="field form-span"><span className="field-label">Default enquiry greeting</span><textarea className="input" value={form.defaultEnquiryMessage} onChange={(event) => update("defaultEnquiryMessage", event.target.value)} /></label><BranchContactEditor value={form.branchNumbers} onChange={(value) => update("branchNumbers", value)} /></div><Button onClick={save} disabled={busy || !form.whatsappNumber}>{busy ? <LoaderCircle className="spin" size={18} /> : <Save size={18} />} Save enquiry settings</Button></Card>}</div>;
 }
 
 export function JewelleryEnquiriesAdmin() {

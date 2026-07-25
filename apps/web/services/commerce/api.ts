@@ -132,7 +132,7 @@ const jewelleryEnquirySchema = z.object({
 const analyticsSchema = z.object({
   eventType: z.enum([
     "MENU_VIEW", "PRODUCT_VIEW", "THREE_D_VIEW", "AR_LAUNCH", "CART_ADD", "CART_REMOVE",
-    "TRY_ON_START", "FRONT_CAMERA_TRY_ON", "REAR_CAMERA_TRY_ON", "SCREENSHOT_CAPTURE",
+    "TRY_ON_START", "FRONT_CAMERA_TRY_ON", "REAR_CAMERA_TRY_ON", "TRY_ON_DURATION", "SCREENSHOT_CAPTURE",
     "PRODUCT_FAVOURITE",
   ]),
   productId: objectId.optional(),
@@ -390,15 +390,23 @@ async function restaurantAnalytics(request: NextRequest) {
 async function jewelleryAnalytics(request: NextRequest) {
   const { business } = await ownedBusiness(request);
   const types = [
-    "PRODUCT_QR_SCAN", "PRODUCT_VIEW", "TRY_ON_START", "FRONT_CAMERA_TRY_ON", "REAR_CAMERA_TRY_ON",
+    "PRODUCT_QR_SCAN", "PRODUCT_VIEW", "TRY_ON_START", "FRONT_CAMERA_TRY_ON", "REAR_CAMERA_TRY_ON", "TRY_ON_DURATION",
     "SCREENSHOT_CAPTURE", "PRICE_ENQUIRY_CLICK", "AVAILABILITY_ENQUIRY_CLICK", "STORE_VISIT_CLICK",
     "VIDEO_CALL_CLICK", "JEWELLERY_WHATSAPP_OPENED", "PRODUCT_FAVOURITE",
   ];
-  const totals = await AnalyticsEvent.aggregate([
-    { $match: { businessId: business._id, eventType: { $in: types } } },
-    { $group: { _id: "$eventType", count: { $sum: 1 } } },
+  const [totals, durationStats] = await Promise.all([
+    AnalyticsEvent.aggregate([
+      { $match: { businessId: business._id, eventType: { $in: types } } },
+      { $group: { _id: "$eventType", count: { $sum: 1 } } },
+    ]),
+    AnalyticsEvent.aggregate([
+      { $match: { businessId: business._id, eventType: "TRY_ON_DURATION" } },
+      { $group: { _id: null, total: { $sum: "$metadata.durationSeconds" }, average: { $avg: "$metadata.durationSeconds" } } },
+    ]),
   ]);
   const summary = Object.fromEntries(types.map((type) => [type, totals.find((item) => item._id === type)?.count ?? 0]));
+  summary.TRY_ON_DURATION_SECONDS = Math.round(durationStats[0]?.total ?? 0);
+  summary.AVERAGE_TRY_ON_DURATION_SECONDS = Math.round(durationStats[0]?.average ?? 0);
   const popular = await JewelleryEnquiry.aggregate([
     { $match: { businessId: business._id } },
     { $group: { _id: "$productId", enquiries: { $sum: 1 } } },
@@ -426,7 +434,7 @@ export async function handleCommerceGet(request: NextRequest, path: string): Pro
   }
   if (path === "restaurant/menu-items") return listMenuItems(request);
   if (path === "restaurant/cart") return getRestaurantCart(request);
-  if (path === "restaurant/dining-sessions/current") {
+  if (path === "restaurant/dining-sessions" || path === "restaurant/dining-sessions/current") {
     const context = await requireDiningSession(request);
     return ok({
       session: { id: String(context.session._id), expiresAt: context.session.expiresAt },
@@ -611,6 +619,7 @@ async function createJewelleryEnquiry(request: NextRequest, openWhatsapp: boolea
     CommerceProductProfile.findOne({ businessId: business._id, productId: product._id, kind: "JEWELLERY" }),
     JewellerySettings.findOne({ businessId: business._id }),
   ]);
+  const configuredBranch = settings?.branchNumbers?.find((branch: { branchId?: string; branchName?: string }) => branch.branchId === input.branchId);
   const baseUrl = getEnvironment().NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   const message = buildJewelleryEnquiryMessage({
     businessName: business.name,
@@ -625,6 +634,7 @@ async function createJewelleryEnquiry(request: NextRequest, openWhatsapp: boolea
     productUrl: `${baseUrl}/ar/${business.slug}/${product.slug}`,
     tryOnUrl: `${baseUrl}/try-on/${business.slug}/${product.slug}`,
     ...input,
+    branchName: configuredBranch?.branchName || (input.branchId !== "main" ? input.branchId : ""),
     openingText: settings?.defaultEnquiryMessage,
   });
   let number = getBusinessNumber(settings, input.branchId ?? "main");
