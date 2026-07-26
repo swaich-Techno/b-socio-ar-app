@@ -167,6 +167,10 @@ textarea.input { min-height: 118px; resize: vertical; }
 .auth-heading h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; letter-spacing: -.045em; }
 .auth-heading p { margin: 10px 0 0; color: var(--muted-foreground); }
 .auth-form { display: grid; gap: 18px; }
+.button-google { width: 100%; min-height: 48px; color: #1f2937; border-color: #cfd5dc; background: white; box-shadow: 0 2px 8px rgba(15,23,42,.06); }
+.button-google:hover { border-color: #9aa4b2; background: #f8fafc; }
+.auth-divider { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; color: var(--muted-foreground); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; background: var(--border); }
 .form-grid { display: grid; gap: 18px; }
 .form-span { grid-column: 1 / -1; }
 .phone-grid { display: grid; grid-template-columns: minmax(100px, .42fr) minmax(0, 1fr); gap: 12px; }
@@ -176,6 +180,8 @@ textarea.input { min-height: 118px; resize: vertical; }
 .check-row { display: flex; align-items: center; min-height: 44px; gap: 9px; color: #40516a; font-size: 14px; cursor: pointer; }
 .check-row input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); }
 .form-between { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; color: var(--primary); font-size: 14px; font-weight: 700; }
+.form-between.form-end { justify-content: flex-end; }
+.form-between a { display: inline-flex; align-items: center; min-height: 44px; }
 .consents { display: grid; gap: 8px; }
 .form-alert, .form-success { padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 650; }
 .form-alert { color: #991b1b; border: 1px solid #fecaca; background: #fef2f2; }

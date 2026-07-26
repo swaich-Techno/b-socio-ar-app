@@ -13,6 +13,7 @@ const userSchema = new Schema(
     countryCallingCode: { type: String, required: true },
     mobileNumber: { type: String, required: true },
     passwordHash: { type: String, required: true, select: false },
+    googleSubject: { type: String, select: false },
     role: { type: String, enum: USER_ROLES, required: true, default: "CUSTOMER" },
     businessId: { type: objectId, ref: "Business", index: true },
     companyRole: { type: String, enum: ["COMPANY_ADMIN", "DISPATCH"], default: "COMPANY_ADMIN" },
@@ -31,6 +32,7 @@ const userSchema = new Schema(
   timestamps,
 );
 userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ googleSubject: 1 }, { unique: true, sparse: true });
 userSchema.index({ role: 1, createdAt: -1 });
 
 const businessSchema = new Schema(

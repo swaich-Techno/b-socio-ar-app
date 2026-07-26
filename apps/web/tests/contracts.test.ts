@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { JOB_STATUSES, USER_ROLES } from "@bsocio/shared-types";
 import { DEMO_LIMITS, getDemoLimits } from "@bsocio/constants";
-import { productSchema, registrationSchema, reviewSchema } from "@bsocio/validation";
+import { forgotPasswordSchema, productSchema, registrationSchema, reviewSchema } from "@bsocio/validation";
 
 describe("shared workflow contracts", () => {
   it("keeps the exact cross-runtime status vocabulary", () => {
@@ -36,5 +36,11 @@ describe("shared workflow contracts", () => {
   it("requires the administrator to review the exact product and model versions", () => {
     expect(reviewSchema.safeParse({ productId: "507f1f77bcf86cd799439011", decision: "APPROVE_PRODUCT" }).success).toBe(false);
     expect(reviewSchema.safeParse({ productId: "507f1f77bcf86cd799439011", decision: "APPROVE_PRODUCT", expectedProductVersion: 3, expectedModelVersion: 2 }).success).toBe(true);
+  });
+
+  it("keeps password recovery scoped to the selected sign-in portal", () => {
+    expect(forgotPasswordSchema.safeParse({ email: "admin@example.com", portal: "admin" }).success).toBe(true);
+    expect(forgotPasswordSchema.safeParse({ email: "admin@example.com", portal: "super-admin" }).success).toBe(false);
+    expect(forgotPasswordSchema.safeParse({ email: "admin@example.com" }).success).toBe(false);
   });
 });

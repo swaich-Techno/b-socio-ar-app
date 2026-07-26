@@ -10,6 +10,7 @@ const serverEnvironmentSchema = z.object({
     z.enum(["development", "test", "production"]).default("development"),
   ),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  NEXT_PUBLIC_GOOGLE_TAG_ID: optionalString,
   MONGODB_URI: optionalString,
   MONGODB_DB_NAME: z.string().default("bsocio_ar"),
   AUTH_SECRET: optionalString,
@@ -37,6 +38,8 @@ const serverEnvironmentSchema = z.object({
   SMTP_USER: optionalString,
   SMTP_PASSWORD: optionalString,
   EMAIL_FROM: optionalString,
+  GOOGLE_CLIENT_ID: optionalString,
+  GOOGLE_CLIENT_SECRET: optionalString,
   ALLOW_DEMO_MODE: z.enum(["true", "false"]).default("false"),
 }).superRefine((value, context) => {
   if (value.NODE_ENV === "production" && value.ALLOW_DEMO_MODE === "true") {
@@ -96,6 +99,16 @@ export function getEmailSettings() {
     password: requireValue(env.SMTP_PASSWORD, "SMTP_PASSWORD"),
     from: requireValue(env.EMAIL_FROM, "EMAIL_FROM"),
     appUrl: env.NEXT_PUBLIC_APP_URL.replace(/\/$/, ""),
+  };
+}
+
+export function getGoogleOAuthSettings() {
+  const env = getEnvironment();
+  return {
+    clientId: requireValue(env.GOOGLE_CLIENT_ID, "GOOGLE_CLIENT_ID"),
+    clientSecret: requireValue(env.GOOGLE_CLIENT_SECRET, "GOOGLE_CLIENT_SECRET"),
+    redirectUri: `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/auth/google/callback`,
+    secure: env.NODE_ENV === "production",
   };
 }
 

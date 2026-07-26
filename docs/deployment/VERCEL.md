@@ -19,6 +19,7 @@ Copy the applicable values from the root `.env.example` into Vercel. At minimum 
 ```dotenv
 ENABLE_EXPERIMENTAL_COREPACK=1
 NEXT_PUBLIC_APP_URL=https://app.example.com
+NEXT_PUBLIC_GOOGLE_TAG_ID=G-XXXXXXXXXX
 MONGODB_URI=mongodb+srv://...
 MONGODB_DB_NAME=bsocio_ar
 AUTH_SECRET=replace-with-at-least-32-random-characters
@@ -38,6 +39,8 @@ SMTP_PORT=587
 SMTP_USER=replace-me
 SMTP_PASSWORD=replace-me
 EMAIL_FROM=B Socio AR <no-reply@example.com>
+GOOGLE_CLIENT_ID=replace-with-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=replace-with-google-oauth-client-secret
 ALLOW_DEMO_MODE=false
 ```
 
@@ -45,11 +48,19 @@ Set production credentials only in the Production environment. Use separate stag
 
 `R2_ACCOUNT_ID` is documentation-only in the current web runtime. `THREE_D_WORKER_SECRET` and `DEMO_MODEL_TARGET_SIZE_MB` belong to the worker deployment rather than Vercel.
 
+## Google sign-in and Google tag
+
+1. In Google Cloud, configure an OAuth consent screen and create a **Web application** OAuth client.
+2. Add `https://b-socio-ar-app-web.vercel.app/api/auth/google/callback` as an exact authorized redirect URI. Add the matching callback for a future custom application domain before switching domains.
+3. Store `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as Sensitive Production variables in Vercel, then redeploy.
+4. Google sign-in links only to an existing B Socio account with the same verified email. It never creates an administrator account.
+5. For analytics, create a Google Analytics web data stream and put its `G-...` measurement ID in `NEXT_PUBLIC_GOOGLE_TAG_ID`. A `GTM-...` container ID is also supported.
+
 ## Before accepting traffic
 
 1. Configure the final custom application and R2 asset domains.
 2. Configure Atlas network access, backups, and separate least-privilege web/worker users.
-3. Run `pnpm db:indexes` once with production MongoDB credentials.
+3. Confirm the production Vercel build log reports `Indexes ensured` for every managed collection. The idempotent index task runs automatically on production builds.
 4. Configure exact-origin R2 CORS and deny anonymous access to the private bucket.
 5. Verify SMTP SPF, DKIM, DMARC, registration verification, and password reset.
 6. Test upload, queue processing, administrator review, payment verification, publication, mobile QR/AR access, revocation, and monitoring.

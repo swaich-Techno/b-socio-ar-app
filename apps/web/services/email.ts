@@ -54,8 +54,8 @@ export async function sendVerificationEmail(email: string, token: string): Promi
   await sendLink(email, "Verify your B Socio AR email", "Verify your email", "Confirm your address to activate secure sign-in.", href);
 }
 
-export async function sendPasswordResetEmail(email: string, token: string): Promise<void> {
+export async function sendPasswordResetEmail(email: string, token: string, admin = false): Promise<void> {
   const settings = getEmailSettings();
-  const href = `${settings.appUrl}/reset-password?token=${encodeURIComponent(token)}`;
+  const href = `${settings.appUrl}/reset-password?token=${encodeURIComponent(token)}${admin ? "&portal=admin" : ""}`;
   await sendLink(email, "Reset your B Socio AR password", "Reset your password", "This time-limited link lets you choose a new password.", href);
 }

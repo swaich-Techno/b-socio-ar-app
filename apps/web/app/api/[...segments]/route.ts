@@ -148,7 +148,7 @@ async function login(request: NextRequest, admin: boolean) {
   await dbConnect();
   await enforceDatabaseRateLimit(`${admin ? "admin" : "customer"}:${getClientIp(request)}:${input.email}`, readPositiveInteger(env.LOGIN_RATE_LIMIT_MAX, 8), readPositiveInteger(env.LOGIN_RATE_LIMIT_WINDOW_MS, 900_000));
   let user = await User.findOne({ email: input.email }).select("+passwordHash");
-  if (admin && env.SUPER_ADMIN_EMAIL?.toLowerCase() === input.email && env.SUPER_ADMIN_PASSWORD_HASH) {
+  if (!user && admin && env.SUPER_ADMIN_EMAIL?.toLowerCase() === input.email && env.SUPER_ADMIN_PASSWORD_HASH) {
     if (!(await verifyPassword(input.password, env.SUPER_ADMIN_PASSWORD_HASH))) throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
     user = await User.findOneAndUpdate(
       { email: input.email },
@@ -178,14 +178,15 @@ async function forgotPassword(request: NextRequest) {
   await enforceDatabaseRateLimit(`forgot:${getClientIp(request)}:${input.email}`, 4, 3_600_000);
   const user = await User.findOne({ email: input.email });
   let developmentResetToken: string | undefined;
-  if (user) {
+  const requestedAdminPortal = input.portal === "admin";
+  if (user && requestedAdminPortal === ADMIN_ROLES.includes(user.role)) {
     const reset = createOpaqueToken();
     user.resetTokenHash = reset.hash;
     user.resetTokenExpiresAt = new Date(Date.now() + readPositiveInteger(env.PASSWORD_RESET_TTL_MINUTES, 30) * 60_000);
     await user.save();
     await Notification.create({ userId: user._id, businessId: user.businessId, type: "PASSWORD_RESET", title: "Password reset requested", message: "A time-limited password reset was requested for your account." });
     if (env.ALLOW_DEMO_MODE === "true") developmentResetToken = reset.raw;
-    else await sendPasswordResetEmail(user.email, reset.raw);
+    else await sendPasswordResetEmail(user.email, reset.raw, requestedAdminPortal);
   }
   return ok({ message: "If the account exists, password-reset instructions have been created.", ...(developmentResetToken ? { developmentResetToken } : {}) });
 }
@@ -201,7 +202,10 @@ async function resetPassword(request: NextRequest) {
   user.sessionVersion += 1;
   await user.save();
   await writeAudit({ actorId: user._id.toString(), businessId: user.businessId?.toString(), action: "PASSWORD_RESET", entityType: "User", entityId: user._id.toString(), request });
-  return ok({ message: "Password updated. Sign in with your new password." });
+  return ok({
+    message: "Password updated. Sign in with your new password.",
+    redirectTo: ADMIN_ROLES.includes(user.role) ? "/admin/login?reset=1" : "/login?reset=1",
+  });
 }
 
 async function verifyEmail(request: NextRequest) {

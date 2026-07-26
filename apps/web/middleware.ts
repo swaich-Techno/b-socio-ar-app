@@ -12,7 +12,7 @@ function loginUrl(request: NextRequest, admin: boolean) {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  if (pathname === "/admin/login" || pathname === "/admin/register") return NextResponse.next();
+  if (pathname === "/admin/login" || pathname === "/admin/register" || pathname === "/admin/forgot-password") return NextResponse.next();
   const isCustomerPath = customerPrefixes.some((prefix) => pathname.startsWith(prefix));
   const isAdminPath = adminPrefixes.some((prefix) => pathname.startsWith(prefix));
   if (!isCustomerPath && !isAdminPath) return NextResponse.next();

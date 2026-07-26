@@ -96,6 +96,8 @@ Copy `.env.example` to `apps\web\.env.local` and provide at minimum:
 - R2 account, S3-compatible endpoint, access keys, private/public bucket names
 - `NEXT_PUBLIC_APP_URL`
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` for Google sign-in
+- `NEXT_PUBLIC_GOOGLE_TAG_ID` for Google Analytics or Tag Manager
 
 Generate secrets locally, for example:
 
