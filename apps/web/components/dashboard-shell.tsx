@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   BadgeDollarSign,
@@ -108,6 +109,14 @@ const ADMIN_NAV_PERMISSIONS: Record<string, readonly string[]> = {
   SUPPORT_MANAGER: ["/admin", "/admin/customers", "/admin/businesses", "/admin/demo-projects", "/admin/products", "/admin/support"],
 };
 
+function groupItems<T extends readonly (readonly [string, string, LucideIcon])[]>(
+  items: T,
+  start: number,
+  end?: number,
+) {
+  return items.slice(start, end);
+}
+
 export function DashboardShell({
   children,
   admin = false,
@@ -128,7 +137,20 @@ export function DashboardShell({
     : /jewellery|jewelry/.test(category)
       ? jewelleryNav
       : [];
-  const nav = admin ? visibleAdminNav : [...customerNav, ...commerceNav];
+  const adminGroups = [
+    { label: "Operations", items: visibleAdminNav.filter(([, href]) => ["/admin", "/admin/customers", "/admin/businesses", "/admin/demo-projects"].includes(href)) },
+    { label: "Production", items: visibleAdminNav.filter(([, href]) => ["/admin/products", "/admin/uploads", "/admin/job-queue", "/admin/models", "/admin/ar-experiences", "/admin/qr-codes", "/admin/approval-queue"].includes(href)) },
+    { label: "Commercial", items: visibleAdminNav.filter(([, href]) => ["/admin/packages", "/admin/payments", "/admin/billing"].includes(href)) },
+    { label: "Administration", items: visibleAdminNav.filter(([, href]) => ["/admin/team-members", "/admin/support", "/admin/analytics", "/admin/worker-health", "/admin/storage-usage", "/admin/audit-logs", "/admin/settings"].includes(href)) },
+  ].filter(({ items }) => items.length);
+  const customerGroups = [
+    { label: "Workspace", items: groupItems(customerNav, 0, 3) },
+    { label: "Production", items: groupItems(customerNav, 3, 10) },
+    ...(commerceNav.length ? [{ label: "Commerce", items: commerceNav }] : []),
+    { label: "Commercial", items: groupItems(customerNav, 10, 14) },
+    { label: "Account", items: groupItems(customerNav, 14) },
+  ];
+  const navGroups = admin ? adminGroups : customerGroups;
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -208,30 +230,32 @@ export function DashboardShell({
             <X size={22} />
           </button>
         </div>
-        <div className="sidebar-label">
-          {admin ? "Manage platform" : "Your workspace"}
-        </div>
-        <nav className="sidebar-nav">
-          {nav.map(([label, href, Icon]) => {
-            const active =
-              href === (admin ? "/admin" : "/dashboard")
-                ? pathname === href
-                : pathname.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={active ? "active" : ""}
-                aria-current={active ? "page" : undefined}
-              >
-                <Icon size={19} />
-                <span>{label}</span>
-                {active ? (
-                  <ChevronRight className="nav-arrow" size={16} />
-                ) : null}
-              </Link>
-            );
-          })}
+        <nav className="sidebar-nav" aria-label={admin ? "Platform sections" : "Workspace sections"}>
+          {navGroups.map((group) => (
+            <div className="sidebar-group" key={group.label}>
+              <div className="sidebar-label">{group.label}</div>
+              {group.items.map(([label, href, Icon]) => {
+                const active =
+                  href === (admin ? "/admin" : "/dashboard")
+                    ? pathname === href
+                    : pathname.startsWith(href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={active ? "active" : ""}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon size={18} />
+                    <span>{label}</span>
+                    {active ? (
+                      <ChevronRight className="nav-arrow" size={16} />
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="sidebar-foot">
           <BriefcaseBusiness size={18} />

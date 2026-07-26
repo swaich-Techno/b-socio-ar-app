@@ -12,8 +12,10 @@ vi.mock("next/navigation", () => ({
 describe("public and shared UI", () => {
   it("renders the primary demo outcome and call to action", () => {
     render(<HomePage />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Turn product photos");
-    expect(screen.getAllByRole("link", { name: /start a demo|create your five-product demo/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Make every scan lead somewhere useful");
+    expect(screen.getAllByRole("link", { name: /start a demo|create a business demo/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: /restaurant table ordering/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /jewellery whatsapp enquiries/i })).toBeInTheDocument();
   });
 
   it("clamps accessible progress values", () => {
