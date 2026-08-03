@@ -16,7 +16,7 @@ import {
 import { createQrSvg } from "@bsocio/qr-engine";
 import {
   clearSessionCookie, createOpaqueToken, hashOpaqueToken, hashPassword, requireAuth,
-  setSessionCookie, toSessionUser, verifyPassword,
+  setSessionCookie, toSessionUser, verifyLoginPassword, verifyPassword,
 } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { dbConnect } from "@/lib/db";
@@ -148,18 +148,22 @@ async function login(request: NextRequest, admin: boolean) {
   await dbConnect();
   await enforceDatabaseRateLimit(`${admin ? "admin" : "customer"}:${getClientIp(request)}:${input.email}`, readPositiveInteger(env.LOGIN_RATE_LIMIT_MAX, 8), readPositiveInteger(env.LOGIN_RATE_LIMIT_WINDOW_MS, 900_000));
   let user = await User.findOne({ email: input.email }).select("+passwordHash");
-  if (!user && admin && env.SUPER_ADMIN_EMAIL?.toLowerCase() === input.email && env.SUPER_ADMIN_PASSWORD_HASH) {
-    if (!(await verifyPassword(input.password, env.SUPER_ADMIN_PASSWORD_HASH))) throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
-    user = await User.findOneAndUpdate(
-      { email: input.email },
-      { $set: { fullName: "Super Administrator", role: "SUPER_ADMIN", passwordHash: env.SUPER_ADMIN_PASSWORD_HASH, suspendedAt: null }, $setOnInsert: { country: "Configured", countryCallingCode: "+1", mobileNumber: "000000", sessionVersion: 1, emailVerifiedAt: new Date() } },
-      { new: true, upsert: true },
-    ).select("+passwordHash");
-  }
-  if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+  const bootstrapHash = admin && env.SUPER_ADMIN_EMAIL?.toLowerCase() === input.email
+    ? env.SUPER_ADMIN_PASSWORD_HASH
+    : undefined;
+  const credentialSource = await verifyLoginPassword(input.password, user?.passwordHash, bootstrapHash);
+  if (!credentialSource) {
     await writeAudit({ action: admin ? "ADMIN_LOGIN_FAILED" : "CUSTOMER_LOGIN_FAILED", entityType: "User", request, success: false, reason: "Invalid credentials" });
     throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
   }
+  if (credentialSource === "bootstrap") {
+    user = await User.findOneAndUpdate(
+      { email: input.email },
+      { $set: { fullName: "Super Administrator", role: "SUPER_ADMIN", passwordHash: bootstrapHash, suspendedAt: null }, $setOnInsert: { country: "Configured", countryCallingCode: "+1", mobileNumber: "000000", sessionVersion: 1, emailVerifiedAt: new Date() } },
+      { new: true, upsert: true },
+    ).select("+passwordHash");
+  }
+  if (!user) throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
   if (user.suspendedAt) throw new HttpError(403, "ACCOUNT_SUSPENDED", "This account is suspended. Contact support.");
   if (!admin && !user.emailVerifiedAt) throw new HttpError(403, "EMAIL_NOT_VERIFIED", "Verify your email address before signing in.");
   const isAdmin = ADMIN_ROLES.includes(user.role);

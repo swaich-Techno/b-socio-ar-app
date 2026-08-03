@@ -25,6 +25,28 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   }
 }
 
+export type LoginCredentialSource = "bootstrap" | "stored";
+
+/**
+ * The configured bootstrap credential is authoritative when it is present.
+ * This lets an administrator rotate the Vercel secret even when the account
+ * already exists in MongoDB, without leaving the previous database password
+ * valid as a fallback.
+ */
+export async function verifyLoginPassword(
+  password: string,
+  storedHash?: string | null,
+  bootstrapHash?: string,
+): Promise<LoginCredentialSource | null> {
+  if (bootstrapHash) {
+    return (await verifyPassword(password, bootstrapHash)) ? "bootstrap" : null;
+  }
+  if (storedHash) {
+    return (await verifyPassword(password, storedHash)) ? "stored" : null;
+  }
+  return null;
+}
+
 export function createOpaqueToken(): { raw: string; hash: string } {
   const raw = randomBytes(32).toString("base64url");
   return { raw, hash: hashOpaqueToken(raw) };
